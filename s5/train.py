@@ -2,12 +2,13 @@ from functools import partial
 from jax import random
 import jax.numpy as np
 from jax.scipy.linalg import block_diag
-import wandb
+import numpy
+import os
 
 from .train_helpers import create_train_state, reduce_lr_on_plateau,\
     linear_warmup, cosine_annealing, constant_lr, train_epoch, validate
 from .dataloading import Datasets
-from .seq_model import BatchClassificationModel, RetrievalModel
+from .seq_model import BatchClassificationModel, BatchRegressionModel
 from .ssm import init_S5SSM
 from .ssm_init import make_DPLR_HiPPO
 
@@ -20,18 +21,11 @@ def train(args):
     best_test_loss = 100000000
     best_test_acc = -10000.0
 
-    if args.USE_WANDB:
-        # Make wandb config dictionary
-        wandb.init(project=args.wandb_project, job_type='model_training', config=vars(args), entity=args.wandb_entity)
-    else:
-        wandb.init(mode='offline')
-
     ssm_size = args.ssm_size_base
     ssm_lr = args.ssm_lr_base
 
     # determine the size of initial blocks
     block_size = int(ssm_size / args.blocks)
-    wandb.log({"block_size": block_size})
 
     # Set global learning rate lr (e.g. encoders, etc.) as function of ssm_lr
     lr = args.lr_factor * ssm_lr
@@ -42,35 +36,22 @@ def train(args):
     init_rng, train_rng = random.split(key, num=2)
 
     # Get dataset creation function
-    create_dataset_fn = Datasets[args.dataset]
+    create_dataset_fn = Datasets[args.problem_type]
 
     # Dataset dependent logic
-    if args.dataset in ["imdb-classification", "listops-classification", "aan-classification"]:
-        padded = True
-        if args.dataset in ["aan-classification"]:
-            # Use retreival model for document matching
-            retrieval = True
-            print("Using retrieval model for document matching")
-        else:
-            retrieval = False
-
-    else:
-        padded = False
-        retrieval = False
-
-    # For speech dataset
-    if args.dataset in ["speech35-classification"]:
-        speech = True
-        print("Will evaluate on both resolutions for speech task")
-    else:
-        speech = False
+    padded = True
+    
+    if args.problem_type == 'rgr':
+        regression = True
+    elif args.problem_type == 'clf':
+        regression = False
 
     # Create dataset...
     init_rng, key = random.split(init_rng, num=2)
-    trainloader, valloader, testloader, aux_dataloaders, n_classes, seq_len, in_dim, train_size = \
-      create_dataset_fn(args.dir_name, seed=args.jax_seed, bsz=args.bsz)
+    trainloader, valloader, testloader, aux_dataloaders, d_out, seq_len, in_dim, train_size = \
+      create_dataset_fn(args.data_dir, args.cache_dir, seed=args.jax_seed, bsz=args.bsz, clear_cache=args.clear_cache)
 
-    print(f"[*] Starting S5 Training on `{args.dataset}` =>> Initializing...")
+    print(f"[*] Starting S5 {args.problem_type} training on `{args.data_dir}` =>> Initializing...")
 
     # Initialize state matrix A using approximation to HiPPO-LegS matrix
     Lambda, _, B, V, B_orig = make_DPLR_HiPPO(block_size)
@@ -106,29 +87,27 @@ def train(args):
                              conj_sym=args.conj_sym,
                              clip_eigs=args.clip_eigs,
                              bidirectional=args.bidirectional)
-
-    if retrieval:
-        # Use retrieval head for AAN task
-        print("Using Retrieval head for {} task".format(args.dataset))
+    
+    if args.problem_type == 'rgr':
         model_cls = partial(
-            RetrievalModel,
+            BatchRegressionModel,
             ssm=ssm_init_fn,
-            d_output=n_classes,
+            d_output=d_out,
             d_model=args.d_model,
             n_layers=args.n_layers,
             padded=padded,
             activation=args.activation_fn,
             dropout=args.p_dropout,
+            mode=args.mode,
             prenorm=args.prenorm,
             batchnorm=args.batchnorm,
             bn_momentum=args.bn_momentum,
         )
-
-    else:
+    elif args.problem_type == 'clf':
         model_cls = partial(
             BatchClassificationModel,
             ssm=ssm_init_fn,
-            d_output=n_classes,
+            d_output=d_out,
             d_model=args.d_model,
             n_layers=args.n_layers,
             padded=padded,
@@ -144,7 +123,6 @@ def train(args):
     state = create_train_state(model_cls,
                                init_rng,
                                padded,
-                               retrieval,
                                in_dim=in_dim,
                                bsz=args.bsz,
                                seq_len=seq_len,
@@ -161,6 +139,10 @@ def train(args):
     lr_count, opt_acc = 0, -100000000.0  # This line is for learning rate decay
     step = 0  # for per step learning rate decay
     steps_per_epoch = int(train_size/args.bsz)
+    
+    if args.epoch_save_dir and not os.path.exists(args.epoch_save_dir):
+        os.makedirs(args.epoch_save_dir)
+    
     for epoch in range(args.epochs):
         print(f"[*] Starting Training Epoch {epoch + 1}...")
 
@@ -174,65 +156,64 @@ def train(args):
             decay_function = cosine_annealing
             # for per step learning rate decay
             end_step = steps_per_epoch * args.epochs - (steps_per_epoch * args.warmup_end)
+            
         else:
             print("using constant lr for epoch {}".format(epoch+1))
             decay_function = constant_lr
             end_step = None
 
-        # TODO: Switch to letting Optax handle this.
         #  Passing this around to manually handle per step learning rate decay.
         lr_params = (decay_function, ssm_lr, lr, step, end_step, args.opt_config, args.lr_min)
 
         train_rng, skey = random.split(train_rng)
-        state, train_loss, step = train_epoch(state,
+        
+        return_train = int(args.save_training) > 0
+        
+        state, train_loss, step, train_pred, train_targ = train_epoch(state,
                                               skey,
                                               model_cls,
+                                              args.problem_type,
                                               trainloader,
                                               seq_len,
                                               in_dim,
                                               args.batchnorm,
-                                              lr_params)
+                                              lr_params,
+                                              return_train)
 
-        if valloader is not None:
-            print(f"[*] Running Epoch {epoch + 1} Validation...")
-            val_loss, val_acc = validate(state,
-                                         model_cls,
-                                         valloader,
-                                         seq_len,
-                                         in_dim,
-                                         args.batchnorm)
+        print(f"[*] Running Epoch {epoch + 1} Validation...")
+        val_loss, val_acc, val_pred, val_targ = validate(state,
+                                     model_cls,
+                                     args.problem_type,
+                                     valloader,
+                                     seq_len,
+                                     in_dim,
+                                     args.batchnorm)
 
-            print(f"[*] Running Epoch {epoch + 1} Test...")
-            test_loss, test_acc = validate(state,
-                                           model_cls,
-                                           testloader,
-                                           seq_len,
-                                           in_dim,
-                                           args.batchnorm)
+        print(f"[*] Running Epoch {epoch + 1} Test...")
+        test_loss, test_acc, test_pred, test_targ = validate(state,
+                                       model_cls,
+                                       args.problem_type,
+                                       testloader,
+                                       seq_len,
+                                       in_dim,
+                                       args.batchnorm)
 
-            print(f"\n=>> Epoch {epoch + 1} Metrics ===")
-            print(
-                f"\tTrain Loss: {train_loss:.5f} -- Val Loss: {val_loss:.5f} --Test Loss: {test_loss:.5f} --"
-                f" Val Accuracy: {val_acc:.4f}"
-                f" Test Accuracy: {test_acc:.4f}"
-            )
+        print(f"\n=>> Epoch {epoch + 1} Metrics ===")
+        print(
+            f"\tTrain Loss: {train_loss:.5f} -- Val Loss: {val_loss:.5f} --Test Loss: {test_loss:.5f} --"
+            f" Val Accuracy: {val_acc:.4f}"
+            f" Test Accuracy: {test_acc:.4f}"
+        )
 
-        else:
-            # else use test set as validation set (e.g. IMDB)
-            print(f"[*] Running Epoch {epoch + 1} Test...")
-            val_loss, val_acc = validate(state,
-                                         model_cls,
-                                         testloader,
-                                         seq_len,
-                                         in_dim,
-                                         args.batchnorm)
-
-            print(f"\n=>> Epoch {epoch + 1} Metrics ===")
-            print(
-                f"\tTrain Loss: {train_loss:.5f}  --Test Loss: {val_loss:.5f} --"
-                f" Test Accuracy: {val_acc:.4f}"
-            )
-
+        if args.epoch_save_dir:
+            save_dict = {'val_pred': val_pred, 'val_targ': val_targ}
+            if int(args.save_training) and ((epoch % int(args.save_training)) == 0):
+                save_dict['train_pred'] = train_pred
+                save_dict['train_targ'] = train_targ
+                
+            numpy.save(
+                os.path.join(args.epoch_save_dir, f'epoch_{epoch}.npy'), numpy.array([save_dict]))
+            
         # For early stopping purposes
         if val_loss < best_val_loss:
             count = 0
@@ -249,27 +230,6 @@ def train(args):
             else:
                 best_test_loss, best_test_acc = best_loss, best_acc
 
-            # Do some validation on improvement.
-            if speech:
-                # Evaluate on resolution 2 val and test sets
-                print(f"[*] Running Epoch {epoch + 1} Res 2 Validation...")
-                val2_loss, val2_acc = validate(state,
-                                               model_cls,
-                                               aux_dataloaders['valloader2'],
-                                               int(seq_len // 2),
-                                               in_dim,
-                                               args.batchnorm,
-                                               step_rescale=2.0)
-
-                print(f"[*] Running Epoch {epoch + 1} Res 2 Test...")
-                test2_loss, test2_acc = validate(state, model_cls, aux_dataloaders['testloader2'], int(seq_len // 2), in_dim, args.batchnorm, step_rescale=2.0)
-                print(f"\n=>> Epoch {epoch + 1} Res 2 Metrics ===")
-                print(
-                    f"\tVal2 Loss: {val2_loss:.5f} --Test2 Loss: {test2_loss:.5f} --"
-                    f" Val Accuracy: {val2_acc:.4f}"
-                    f" Test Accuracy: {test2_acc:.4f}"
-                )
-
         # For learning rate decay purposes:
         input = lr, ssm_lr, lr_count, val_acc, opt_acc
         lr, ssm_lr, lr_count, opt_acc = reduce_lr_on_plateau(input, factor=args.reduce_factor, patience=args.lr_patience, lr_min=args.lr_min)
@@ -281,61 +241,6 @@ def train(args):
             f"\tBest Test Loss: {best_test_loss:.5f} -- Best Test Accuracy:"
             f" {best_test_acc:.4f} at Epoch {best_epoch + 1}\n"
         )
-
-        if valloader is not None:
-            if speech:
-                wandb.log(
-                    {
-                        "Training Loss": train_loss,
-                        "Val loss": val_loss,
-                        "Val Accuracy": val_acc,
-                        "Test Loss": test_loss,
-                        "Test Accuracy": test_acc,
-                        "Val2 loss": val2_loss,
-                        "Val2 Accuracy": val2_acc,
-                        "Test2 Loss": test2_loss,
-                        "Test2 Accuracy": test2_acc,
-                        "count": count,
-                        "Learning rate count": lr_count,
-                        "Opt acc": opt_acc,
-                        "lr": state.opt_state.inner_states['regular'].inner_state.hyperparams['learning_rate'],
-                        "ssm_lr": state.opt_state.inner_states['ssm'].inner_state.hyperparams['learning_rate']
-                    }
-                )
-            else:
-                wandb.log(
-                    {
-                        "Training Loss": train_loss,
-                        "Val loss": val_loss,
-                        "Val Accuracy": val_acc,
-                        "Test Loss": test_loss,
-                        "Test Accuracy": test_acc,
-                        "count": count,
-                        "Learning rate count": lr_count,
-                        "Opt acc": opt_acc,
-                        "lr": state.opt_state.inner_states['regular'].inner_state.hyperparams['learning_rate'],
-                        "ssm_lr": state.opt_state.inner_states['ssm'].inner_state.hyperparams['learning_rate']
-                    }
-                )
-
-        else:
-            wandb.log(
-                {
-                    "Training Loss": train_loss,
-                    "Val loss": val_loss,
-                    "Val Accuracy": val_acc,
-                    "count": count,
-                    "Learning rate count": lr_count,
-                    "Opt acc": opt_acc,
-                    "lr": state.opt_state.inner_states['regular'].inner_state.hyperparams['learning_rate'],
-                    "ssm_lr": state.opt_state.inner_states['ssm'].inner_state.hyperparams['learning_rate']
-                }
-            )
-        wandb.run.summary["Best Val Loss"] = best_loss
-        wandb.run.summary["Best Val Accuracy"] = best_acc
-        wandb.run.summary["Best Epoch"] = best_epoch
-        wandb.run.summary["Best Test Loss"] = best_test_loss
-        wandb.run.summary["Best Test Accuracy"] = best_test_acc
 
         if count > args.early_stop_patience:
             break

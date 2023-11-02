@@ -4,6 +4,7 @@ import jax.numpy as np
 from jax.nn import one_hot
 from tqdm import tqdm
 from flax.training import train_state
+import numpy
 import optax
 from typing import Any, Tuple
 
@@ -12,14 +13,12 @@ from typing import Any, Tuple
 def linear_warmup(step, base_lr, end_step, lr_min=None):
     return base_lr * (step + 1) / end_step
 
-
 def cosine_annealing(step, base_lr, end_step, lr_min=1e-6):
     # https://github.com/deepmind/optax/blob/master/optax/_src/schedule.py#L207#L240
     count = np.minimum(step, end_step)
     cosine_decay = 0.5 * (1 + np.cos(np.pi * count / end_step))
     decayed = (base_lr - lr_min) * cosine_decay + lr_min
     return decayed
-
 
 def reduce_lr_on_plateau(input, factor=0.2, patience=20, lr_min=1e-6):
     lr, ssm_lr, count, new_acc, opt_acc = input
@@ -41,10 +40,8 @@ def reduce_lr_on_plateau(input, factor=0.2, patience=20, lr_min=1e-6):
 
     return lr, ssm_lr, count, opt_acc
 
-
 def constant_lr(step, base_lr, end_step,  lr_min=None):
     return base_lr
-
 
 def update_learning_rate_per_step(lr_params, state):
     decay_function, ssm_lr, lr, step, end_step, opt_config, lr_min = lr_params
@@ -83,16 +80,15 @@ def map_nested_fn(fn):
 def create_train_state(model_cls,
                        rng,
                        padded,
-                       retrieval,
-                       in_dim=1,
-                       bsz=128,
-                       seq_len=784,
-                       weight_decay=0.01,
-                       batchnorm=False,
-                       opt_config="standard",
-                       ssm_lr=1e-3,
-                       lr=1e-3,
-                       dt_global=False
+                       in_dim,  #=1,
+                       bsz,  #=128,
+                       seq_len,  #=784,
+                       weight_decay,  #=0.01,
+                       batchnorm,  #=False,
+                       opt_config,  #="standard",
+                       ssm_lr,  #=1e-3,
+                       lr,  #=1e-3,
+                       dt_global,  #=False
                        ):
     """
     Initializes the training state using optax
@@ -100,7 +96,6 @@ def create_train_state(model_cls,
     :param model_cls:
     :param rng:
     :param padded:
-    :param retrieval:
     :param in_dim:
     :param bsz:
     :param seq_len:
@@ -114,13 +109,8 @@ def create_train_state(model_cls,
     """
 
     if padded:
-        if retrieval:
-            # For retrieval tasks we have two different sets of "documents"
-            dummy_input = (np.ones((2*bsz, seq_len, in_dim)), np.ones(2*bsz))
-            integration_timesteps = np.ones((2*bsz, seq_len,))
-        else:
-            dummy_input = (np.ones((bsz, seq_len, in_dim)), np.ones(bsz))
-            integration_timesteps = np.ones((bsz, seq_len,))
+        dummy_input = (np.ones((bsz, seq_len, in_dim)), np.ones(bsz))
+        integration_timesteps = np.ones((bsz, seq_len,))
     else:
         dummy_input = np.ones((bsz, seq_len, in_dim))
         integration_timesteps = np.ones((bsz, seq_len, ))
@@ -132,11 +122,10 @@ def create_train_state(model_cls,
                            dummy_input, integration_timesteps,
                            )
     if batchnorm:
-        params = variables["params"].unfreeze()
+        params = variables["params"]
         batch_stats = variables["batch_stats"]
     else:
-        params = variables["params"].unfreeze()
-        # Note: `unfreeze()` is for using Optax.
+        params = variables["params"]
 
     if opt_config in ["standard"]:
         """This option applies weight decay to C, but B is kept with the
@@ -262,18 +251,6 @@ def create_train_state(model_cls,
         return train_state.TrainState.create(apply_fn=model.apply, params=params, tx=tx)
 
 
-# Train and eval steps
-@partial(np.vectorize, signature="(c),()->()")
-def cross_entropy_loss(logits, label):
-    one_hot_label = jax.nn.one_hot(label, num_classes=logits.shape[0])
-    return -np.sum(one_hot_label * logits)
-
-
-@partial(np.vectorize, signature="(c),()->()")
-def compute_accuracy(logits, label):
-    return np.argmax(logits) == label
-
-
 def prep_batch(batch: tuple,
                seq_len: int,
                in_dim: int) -> Tuple[np.ndarray, np.ndarray, np.array]:
@@ -309,7 +286,7 @@ def prep_batch(batch: tuple,
     # transform into one-hot.  This should be a fairly reliable fix.
     if (inputs.ndim < 3) and (inputs.shape[-1] != in_dim):
         inputs = one_hot(np.asarray(inputs), in_dim)
-
+    
     # If there are lengths, bundle them up.
     if lengths is not None:
         lengths = np.asarray(lengths.numpy())
@@ -320,67 +297,124 @@ def prep_batch(batch: tuple,
     # Convert and apply.
     targets = np.array(targets.numpy())
 
-    # If there is an aux channel containing the integration times, then add that.
-    if 'timesteps' in aux_data.keys():
-        integration_timesteps = np.diff(np.asarray(aux_data['timesteps'].numpy()))
-    else:
-        integration_timesteps = np.ones((len(inputs), seq_len))
+    integration_timesteps = np.ones((len(inputs), seq_len))
 
     return full_inputs, targets.astype(float), integration_timesteps
 
 
-def train_epoch(state, rng, model, trainloader, seq_len, in_dim, batchnorm, lr_params):
+# Loss/accuracy functions
+## classification
+@partial(np.vectorize, signature="(c),()->()")
+def cross_entropy_loss(logits, label):
+    one_hot_label = jax.nn.one_hot(label, num_classes=logits.shape[0])
+    return -np.sum(one_hot_label * logits)
+
+@partial(np.vectorize, signature="(c),()->()")
+def compute_accuracy(logits, label):
+    return np.argmax(logits) == label
+
+## regression
+@partial(np.vectorize, signature="(),()->()")
+def sq_err_loss(y_hat, target):
+    return (y_hat-target)**2
+
+@partial(np.vectorize, signature="(),()->()")
+def acc_rgr(y_hat, target):
+    return -sq_err_loss(y_hat, target)
+
+
+def train_epoch(state, rng, model, problem_type, trainloader, seq_len, in_dim, batchnorm, lr_params, return_train):
     """
     Training function for an epoch that loops over batches.
     """
+    
     # Store Metrics
     model = model(training=True)
     batch_losses = []
 
     decay_function, ssm_lr, lr, step, end_step, opt_config, lr_min = lr_params
 
+    preds_all = []
+    targs_all = []
+    
     for batch_idx, batch in enumerate(tqdm(trainloader)):
-        inputs, labels, integration_times = prep_batch(batch, seq_len, in_dim)
+        inputs, targets, integration_times = prep_batch(batch, seq_len, in_dim)
         rng, drop_rng = jax.random.split(rng)
-        state, loss = train_step(
-            state,
-            drop_rng,
-            inputs,
-            labels,
-            integration_times,
-            model,
-            batchnorm,
-        )
+        
+        if problem_type == 'clf':
+            state, loss, preds, targs = train_step_clf(
+                state,
+                drop_rng,
+                inputs,
+                targets,
+                integration_times,
+                model,
+                batchnorm,
+                return_train,
+            )
+        elif problem_type == 'rgr':
+            state, loss, preds, targs = train_step_rgr(
+                state,
+                drop_rng,
+                inputs,
+                targets,
+                integration_times,
+                model,
+                batchnorm,
+                return_train,
+            )
         batch_losses.append(loss)
         lr_params = (decay_function, ssm_lr, lr, step, end_step, opt_config, lr_min)
         state, step = update_learning_rate_per_step(lr_params, state)
-
+        
+        preds_all.append(numpy.array(preds))
+        targs_all.append(numpy.array(targs))
+    
     # Return average loss over batches
-    return state, np.mean(np.array(batch_losses)), step
+    return state, np.mean(np.array(batch_losses)), step, preds_all, targs_all
 
 
-def validate(state, model, testloader, seq_len, in_dim, batchnorm, step_rescale=1.0):
+def validate(state, model, problem_type, testloader, seq_len, in_dim, batchnorm, step_rescale=1.0):
     """Validation function that loops over batches"""
     model = model(training=False, step_rescale=step_rescale)
-    losses, accuracies, preds = np.array([]), np.array([]), np.array([])
-    for batch_idx, batch in enumerate(tqdm(testloader)):
-        inputs, labels, integration_timesteps = prep_batch(batch, seq_len, in_dim)
-        loss, acc, pred = eval_step(inputs, labels, integration_timesteps, state, model, batchnorm)
-        losses = np.append(losses, loss)
-        accuracies = np.append(accuracies, acc)
+    
+    if problem_type == 'clf':
+        losses, accuracies, preds, targets = np.array([]), np.array([]), np.array([]), np.array([])
+        for batch_idx, batch in enumerate(tqdm(testloader)):
+            inputs, target, integration_timesteps = prep_batch(batch, seq_len, in_dim)
+            loss, acc, pred = eval_step_clf(inputs, target, integration_timesteps, state, model, batchnorm)
+            losses = np.append(losses, loss)
+            accuracies = np.append(accuracies, acc)
+            preds = np.append(preds, pred)
+            targets = np.append(targets, target)
 
-    aveloss, aveaccu = np.mean(losses), np.mean(accuracies)
-    return aveloss, aveaccu
+        aveloss, aveaccu = np.mean(losses), np.mean(accuracies)
+        return aveloss, aveaccu, preds, targets
+    
+    elif problem_type == 'rgr':
+        losses, accuracies, y_hats, targets = np.array([]), np.array([]), np.array([]), np.array([])
+        for batch_idx, batch in enumerate(tqdm(testloader)):
+            inputs, target, integration_timesteps = prep_batch(batch, seq_len, in_dim)
+            loss, acc, y_hat = eval_step_rgr(inputs, target, integration_timesteps, state, model, batchnorm)
+            losses = np.append(losses, loss)
+            accuracies = np.append(accuracies, acc)
+
+            targets = np.append(targets, target)
+            y_hats = np.append(y_hats, y_hat)
+
+        aveloss, aveaccu = np.mean(losses), np.mean(accuracies)
+        return aveloss, aveaccu, y_hats, targets
 
 
-@partial(jax.jit, static_argnums=(5, 6))
-def train_step(state,
+@partial(jax.jit, static_argnums=(5, 6, 7))
+def train_step_clf(state,
                rng,
                batch_inputs,
-               batch_labels,
+               batch_targets,
                batch_integration_timesteps,
                model,
                batchnorm,
+               return_train,
                ):
     """Performs a single training step given a batch of data"""
     def loss_fn(params):
@@ -400,7 +434,7 @@ def train_step(state,
                 mutable=["intermediates"],
             )
 
-        loss = np.mean(cross_entropy_loss(logits, batch_labels))
+        loss = np.mean(cross_entropy_loss(logits, batch_targets))
 
         return loss, (mod_vars, logits)
 
@@ -410,12 +444,16 @@ def train_step(state,
         state = state.apply_gradients(grads=grads, batch_stats=mod_vars["batch_stats"])
     else:
         state = state.apply_gradients(grads=grads)
-    return state, loss
+        
+    if return_train:
+        return state, loss, logits, batch_targets
+    else:
+        return state, loss, None, None
 
 
 @partial(jax.jit, static_argnums=(4, 5))
-def eval_step(batch_inputs,
-              batch_labels,
+def eval_step_clf(batch_inputs,
+              batch_targets,
               batch_integration_timesteps,
               state,
               model,
@@ -429,8 +467,76 @@ def eval_step(batch_inputs,
         logits = model.apply({"params": state.params},
                              batch_inputs, batch_integration_timesteps,
                              )
-
-    losses = cross_entropy_loss(logits, batch_labels)
-    accs = compute_accuracy(logits, batch_labels)
+    
+    losses = cross_entropy_loss(logits, batch_targets)
+    accs = compute_accuracy(logits, batch_targets)
 
     return losses, accs, logits
+
+    
+@partial(jax.jit, static_argnums=(5, 6, 7))
+def train_step_rgr(state,
+               rng,
+               batch_inputs,
+               batch_targets,
+               batch_integration_timesteps,
+               model,
+               batchnorm,
+               return_train,
+               ):
+    """Performs a single training step given a batch of data"""
+    def loss_fn(params):
+
+        if batchnorm:
+            y_hats, mod_vars = model.apply(
+                {"params": params, "batch_stats": state.batch_stats},
+                batch_inputs, batch_integration_timesteps,
+                rngs={"dropout": rng},
+                mutable=["intermediates", "batch_stats"],
+            )
+        else:
+            y_hats, mod_vars = model.apply(
+                {"params": params},
+                batch_inputs, batch_integration_timesteps,
+                rngs={"dropout": rng},
+                mutable=["intermediates"],
+            )
+
+        loss = np.mean(sq_err_loss(y_hats, batch_targets))
+
+        return loss, (mod_vars, y_hats)
+
+    (loss, (mod_vars, y_hats)), grads = jax.value_and_grad(loss_fn, has_aux=True)(state.params)
+
+    if batchnorm:
+        state = state.apply_gradients(grads=grads, batch_stats=mod_vars["batch_stats"])
+    else:
+        state = state.apply_gradients(grads=grads)
+        
+    if return_train:
+        return state, loss, y_hats, batch_targets
+    else:
+        return state, loss, None, None
+
+
+@partial(jax.jit, static_argnums=(4, 5))
+def eval_step_rgr(batch_inputs,
+              targets,
+              batch_integration_timesteps,
+              state,
+              model,
+              batchnorm
+              ):
+    if batchnorm:
+        y_hats = model.apply({"params": state.params, "batch_stats": state.batch_stats},
+                             batch_inputs, batch_integration_timesteps,
+                             )
+    else:
+        y_hats = model.apply({"params": state.params},
+                             batch_inputs, batch_integration_timesteps,
+                             )
+    
+    losses = sq_err_loss(y_hats, targets)
+    accs = acc_rgr(y_hats, targets)
+
+    return losses, accs, y_hats
