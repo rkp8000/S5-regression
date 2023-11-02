@@ -201,12 +201,16 @@ def train(args):
         print(f"\n=>> Epoch {epoch + 1} Metrics ===")
         print(
             f"\tTrain Loss: {train_loss:.5f} -- Val Loss: {val_loss:.5f} --Test Loss: {test_loss:.5f} --"
-            f" Val Accuracy: {val_acc:.4f}"
-            f" Test Accuracy: {test_acc:.4f}"
+            f" Val Accuracy: {val_acc:.4f} -- Test Accuracy: {test_acc:.4f}"
         )
 
         if args.epoch_save_dir:
-            save_dict = {'val_pred': val_pred, 'val_targ': val_targ}
+            
+            save_dict = {
+                'val_pred': val_pred, 'val_targ': val_targ,
+                'train_loss': train_loss, 'val_loss': val_loss, 'test_loss': test_loss
+            }
+            
             if int(args.save_training) and ((epoch % int(args.save_training)) == 0):
                 save_dict['train_pred'] = train_pred
                 save_dict['train_targ'] = train_targ
@@ -236,7 +240,7 @@ def train(args):
 
         # Print best accuracy & loss so far...
         print(
-            f"\tBest Val Loss: {best_loss:.5f} -- Best Val Accuracy:"
+            f"\tBest Val Loss: {best_val_loss:.5f} -- Best Val Accuracy:"
             f" {best_acc:.4f} at Epoch {best_epoch + 1}\n"
             f"\tBest Test Loss: {best_test_loss:.5f} -- Best Test Accuracy:"
             f" {best_test_acc:.4f} at Epoch {best_epoch + 1}\n"

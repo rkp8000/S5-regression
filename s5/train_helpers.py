@@ -315,13 +315,8 @@ def compute_accuracy(logits, label):
 
 ## regression
 @partial(np.vectorize, signature="(),()->()")
-def sq_err_loss(y_hat, target):
-    return (y_hat-target)**2
-
-@partial(np.vectorize, signature="(),()->()")
-def acc_rgr(y_hat, target):
-    return -sq_err_loss(y_hat, target)
-
+def abs_err_loss(y_hat, target):
+    return np.abs(y_hat-target)
 
 def train_epoch(state, rng, model, problem_type, trainloader, seq_len, in_dim, batchnorm, lr_params, return_train):
     """
@@ -392,18 +387,17 @@ def validate(state, model, problem_type, testloader, seq_len, in_dim, batchnorm,
         return aveloss, aveaccu, preds, targets
     
     elif problem_type == 'rgr':
-        losses, accuracies, y_hats, targets = np.array([]), np.array([]), np.array([]), np.array([])
+        losses, y_hats, targets = np.array([]), np.array([]), np.array([])
         for batch_idx, batch in enumerate(tqdm(testloader)):
             inputs, target, integration_timesteps = prep_batch(batch, seq_len, in_dim)
-            loss, acc, y_hat = eval_step_rgr(inputs, target, integration_timesteps, state, model, batchnorm)
+            loss, y_hat = eval_step_rgr(inputs, target, integration_timesteps, state, model, batchnorm)
             losses = np.append(losses, loss)
-            accuracies = np.append(accuracies, acc)
 
             targets = np.append(targets, target)
             y_hats = np.append(y_hats, y_hat)
 
-        aveloss, aveaccu = np.mean(losses), np.mean(accuracies)
-        return aveloss, aveaccu, y_hats, targets
+        aveloss = np.mean(losses)
+        return aveloss, np.nan, y_hats, targets
 
 
 @partial(jax.jit, static_argnums=(5, 6, 7))
@@ -502,7 +496,7 @@ def train_step_rgr(state,
                 mutable=["intermediates"],
             )
 
-        loss = np.mean(sq_err_loss(y_hats, batch_targets))
+        loss = np.mean(abs_err_loss(y_hats, batch_targets))
 
         return loss, (mod_vars, y_hats)
 
@@ -536,7 +530,6 @@ def eval_step_rgr(batch_inputs,
                              batch_inputs, batch_integration_timesteps,
                              )
     
-    losses = sq_err_loss(y_hats, targets)
-    accs = acc_rgr(y_hats, targets)
+    losses = abs_err_loss(y_hats, targets)
 
-    return losses, accs, y_hats
+    return losses, y_hats
