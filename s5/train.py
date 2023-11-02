@@ -89,35 +89,24 @@ def train(args):
                              bidirectional=args.bidirectional)
     
     if args.problem_type == 'rgr':
-        model_cls = partial(
-            BatchRegressionModel,
-            ssm=ssm_init_fn,
-            d_output=d_out,
-            d_model=args.d_model,
-            n_layers=args.n_layers,
-            padded=padded,
-            activation=args.activation_fn,
-            dropout=args.p_dropout,
-            mode=args.mode,
-            prenorm=args.prenorm,
-            batchnorm=args.batchnorm,
-            bn_momentum=args.bn_momentum,
-        )
+        SeqModel = BatchRegressionModel
     elif args.problem_type == 'clf':
-        model_cls = partial(
-            BatchClassificationModel,
-            ssm=ssm_init_fn,
-            d_output=d_out,
-            d_model=args.d_model,
-            n_layers=args.n_layers,
-            padded=padded,
-            activation=args.activation_fn,
-            dropout=args.p_dropout,
-            mode=args.mode,
-            prenorm=args.prenorm,
-            batchnorm=args.batchnorm,
-            bn_momentum=args.bn_momentum,
-        )
+        SeqModel = BatchClassificationModel
+        
+    model_cls = partial(
+        SeqModel,
+        ssm=ssm_init_fn,
+        d_output=d_out,
+        d_model=args.d_model,
+        n_layers=args.n_layers,
+        padded=padded,
+        activation=args.activation_fn,
+        dropout=args.p_dropout,
+        mode=args.mode,
+        prenorm=args.prenorm,
+        batchnorm=args.batchnorm,
+        bn_momentum=args.bn_momentum,
+    )
 
     # initialize training state
     state = create_train_state(model_cls,
