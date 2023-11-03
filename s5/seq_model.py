@@ -272,8 +272,8 @@ class RegressionModel(nn.Module):
             raise NotImplementedError("Mode must be in ['pool', 'last]")
 
         x = self.decoder(x)
-        y = x  # bsz x 1 array
-        return y
+        # y = x  # bsz x 1 array
+        return x
 
 
 # Here we call vmap to parallelize across a batch of input sequences

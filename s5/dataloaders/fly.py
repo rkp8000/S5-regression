@@ -18,7 +18,8 @@ from .base import default_data_path, SequenceDataset
 
 class FlyCourtshipRgr(SequenceDataset):
     _name_ = "rgr_fly"
-    d_output = 1
+    # d_output = 1
+    d_output = 2
     l_output = 0
 
     @property
