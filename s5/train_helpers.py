@@ -316,7 +316,7 @@ def compute_accuracy(logits, label):
 ## regression
 @partial(np.vectorize, signature="(c),()->()")
 def abs_err_loss(y_hat, target):
-    return np.sum(np.abs(y_hat-target))
+    return np.mean(np.abs(y_hat-target))
 
 def train_epoch(state, rng, model, problem_type, trainloader, seq_len, in_dim, batchnorm, lr_params, return_train):
     """
