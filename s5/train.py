@@ -30,6 +30,12 @@ def train(args):
     # Set global learning rate lr (e.g. encoders, etc.) as function of ssm_lr
     lr = args.lr_factor * ssm_lr
 
+    if args.epoch_save_dir:
+        print(f'Deleting saved epoch files from {args.epoch_save_dir}...')
+        for fname in os.listdir(args.epoch_save_dir):
+            if fname.endswith('.npy'):
+                os.remove(os.path.join(args.epoch_save_dir, fname))
+
     # Set randomness...
     print("[*] Setting Randomness...")
     key = random.PRNGKey(args.jax_seed)
