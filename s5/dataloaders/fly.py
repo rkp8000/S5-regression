@@ -53,10 +53,6 @@ class FlyCourtshipRgr(SequenceDataset):
                     raise FileNotFoundError(
                         f"""
                     File {str(split_path)} not found.
-                    To get the dataset, download lra_release.gz from
-                    https://github.com/google-research/long-range-arena,
-                    then unzip it with tar -xvf lra_release.gz.
-                    Then point data_dir to the tsv_data directory.
                     """
                     )
         else:  # Process the dataset and save it
@@ -76,18 +72,11 @@ class FlyCourtshipRgr(SequenceDataset):
 
         dataset.set_format(type="torch", columns=["song_num", "fmtn"])
         self.dataset_train, self.dataset_val, self.dataset_test = (
-            dataset["train"],
-            dataset["val"],
-            dataset["test"],
+            dataset["train"], dataset["val"], dataset["test"],
         )
 
         def collate_batch(batch):
-            xs, ys = zip(
-                *[
-                    (data["song_num"], data["fmtn"])
-                    for data in batch
-                ]
-            )
+            xs, ys = zip(*[(data["song_num"], data["fmtn"]) for data in batch])
             lengths = torch.tensor([len(x) for x in xs])
             
             # pad inputs
@@ -119,6 +108,7 @@ class FlyCourtshipRgr(SequenceDataset):
             column_names=["fmtn", "session", "frame", "song"],
             keep_in_memory=True,
         )
+        
         dataset = dataset.remove_columns(["session", "frame"])
         new_features = dataset["train"].features.copy()
         new_features["fmtn"] = Value("float32")
