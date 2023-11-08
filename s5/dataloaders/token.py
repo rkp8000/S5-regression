@@ -69,13 +69,13 @@ class RgrToken(SequenceDataset):
         # self.vocab_size = len(self.vocab)
         print("Vocab size:", len(self.vocab))  # note: includes special tokens
 
-        dataset.set_format(type="torch", columns=["song_num", "fmtn"])
+        dataset.set_format(type="torch", columns=["input_seq_num", "target"])
         self.dataset_train, self.dataset_val, self.dataset_test = (
             dataset["train"], dataset["val"], dataset["test"],
         )
 
         def collate_batch(batch):
-            xs, ys = zip(*[(data["song_num"], data["fmtn"]) for data in batch])
+            xs, ys = zip(*[(data["input_seq_num"], data["target"]) for data in batch])
             lengths = torch.tensor([len(x) for x in xs])
             
             # pad inputs
@@ -104,24 +104,24 @@ class RgrToken(SequenceDataset):
                 "test": str(self.data_dir / "test.tsv"),
             },
             delimiter="\t",
-            column_names=["fmtn", "session", "frame", "song"],
+            column_names=["target", "session", "frame", "input_seq"],
             keep_in_memory=True,
         )
         
         dataset = dataset.remove_columns(["session", "frame"])
         new_features = dataset["train"].features.copy()
-        new_features["fmtn"] = Value("float32")
+        new_features["target"] = Value("float32")
         dataset = dataset.cast(new_features)
 
         tokenizer = list  # Just convert a string to a list of chars
         # Account for <bos> and <eos> tokens
         l_max = self.l_max - int(self.append_bos) - int(self.append_eos)
         tokenize = lambda example: {
-            "tokens": tokenizer(example["song"])[:l_max],
+            "tokens": tokenizer(example["input_seq"])[:l_max],
         }
         dataset = dataset.map(
             tokenize,
-            remove_columns=["song"],
+            remove_columns=["input_seq"],
             keep_in_memory=True,
             load_from_cache_file=False,
             num_proc=max(self.n_workers, 1),
@@ -142,7 +142,7 @@ class RgrToken(SequenceDataset):
             + (["<eos>"] if self.append_eos else [])
         )
         numericalize = lambda example: {
-            "song_num": encode(example["tokens"]),
+            "input_seq_num": encode(example["tokens"]),
         }
         dataset = dataset.map(
             numericalize,
@@ -231,7 +231,7 @@ class ClfToken(SequenceDataset):
         # self.vocab_size = len(self.vocab)
         print("Vcab size:", len(self.vocab))  # note: includes special tokens
 
-        dataset.set_format(type="torch", columns=["song_num", "fmtn"])
+        dataset.set_format(type="torch", columns=["input_seq_num", "target"])
         self.dataset_train, self.dataset_val, self.dataset_test = (
             dataset["train"],
             dataset["val"],
@@ -241,7 +241,7 @@ class ClfToken(SequenceDataset):
         def collate_batch(batch):
             xs, ys = zip(
                 *[
-                    (data["song_num"], data["fmtn"])
+                    (data["input_seq_num"], data["target"])
                     for data in batch
                 ]
             )
@@ -273,23 +273,23 @@ class ClfToken(SequenceDataset):
                 "test": str(self.data_dir / "test.tsv"),
             },
             delimiter="\t",
-            column_names=["fmtn", "session", "frame", "song"],
+            column_names=["target", "session", "frame", "input_seq"],
             keep_in_memory=True,
         )
         dataset = dataset.remove_columns(["session", "frame"])
         new_features = dataset["train"].features.copy()
-        new_features["fmtn"] = Value("int32")
+        new_features["target"] = Value("int32")
         dataset = dataset.cast(new_features)
 
         tokenizer = list  # Just convert a string to a list of chars
         # Account for <bos> and <eos> tokens
         l_max = self.l_max - int(self.append_bos) - int(self.append_eos)
         tokenize = lambda example: {
-            "tokens": tokenizer(example["song"])[:l_max],
+            "tokens": tokenizer(example["input_seq"])[:l_max],
         }
         dataset = dataset.map(
             tokenize,
-            remove_columns=["song"],
+            remove_columns=["input_seq"],
             keep_in_memory=True,
             load_from_cache_file=False,
             num_proc=max(self.n_workers, 1),
@@ -310,7 +310,7 @@ class ClfToken(SequenceDataset):
             + (["<eos>"] if self.append_eos else [])
         )
         numericalize = lambda example: {
-            "song_num": encode(example["tokens"]),
+            "input_seq_num": encode(example["tokens"]),
         }
         dataset = dataset.map(
             numericalize,
