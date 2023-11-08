@@ -55,15 +55,15 @@ def make_data_loader(dset,
 									   drop_last=drop_last, generator=rng)
 									   
 
-def create_rgr_dataset(data_dir, cache_dir: Union[str, Path] = DEFAULT_CACHE_DIR_ROOT,
+def create_rgr_token_dataset(data_dir, cache_dir: Union[str, Path] = DEFAULT_CACHE_DIR_ROOT,
 										  bsz: int = 50,
 										  seed: int = 42, clear_cache=False) -> ReturnType:
 	"""
 	See abstract template.
 	"""
-	print("[*] Generating Fly Courtship Regression Dataset")
-	from s5.dataloaders.fly import FlyCourtshipRgr
-	name = 'rgr_fly'
+	print("[*] Generating Token Sequence Regression Dataset")
+	from s5.dataloaders.token import RgrToken
+	name = 'rgr_token'
     
 	if clear_cache and os.path.exists(os.path.join(cache_dir, name)):
 		print('Clearing cache...')
@@ -75,7 +75,7 @@ def create_rgr_dataset(data_dir, cache_dir: Union[str, Path] = DEFAULT_CACHE_DIR
 		'n_workers': 1,
 	}
 
-	dataset_obj = FlyCourtshipRgr(name, data_dir=dir_name, **kwargs)
+	dataset_obj = RgrToken(name, data_dir=dir_name, **kwargs)
 	dataset_obj.cache_dir = Path(cache_dir) / name
 	dataset_obj.setup()
 
@@ -93,15 +93,15 @@ def create_rgr_dataset(data_dir, cache_dir: Union[str, Path] = DEFAULT_CACHE_DIR
 	return trn_loader, val_loader, tst_loader, aux_loaders, d_out, SEQ_LENGTH, IN_DIM, TRAIN_SIZE
 	
 	
-def create_clf_dataset(data_dir, cache_dir: Union[str, Path] = DEFAULT_CACHE_DIR_ROOT,
+def create_clf_token_dataset(data_dir, cache_dir: Union[str, Path] = DEFAULT_CACHE_DIR_ROOT,
 										  bsz: int = 50,
 										  seed: int = 42, clear_cache=False) -> ReturnType:
 	"""
 	See abstract template.
 	"""
-	print("[*] Generating Fly Courtship Classification Dataset")
-	from s5.dataloaders.fly import FlyCourtshipClf
-	name = 'clf_fly'
+	print("[*] Generating Token Sequence Classification Dataset")
+	from s5.dataloaders.token import ClfToken
+	name = 'clf_token'
 
 	if clear_cache and os.path.exists(os.path.join(cache_dir, name)):
 		print('Clearing cache...')
@@ -113,7 +113,7 @@ def create_clf_dataset(data_dir, cache_dir: Union[str, Path] = DEFAULT_CACHE_DIR
 		'n_workers': 1,
 	}
 
-	dataset_obj = FlyCourtshipClf(name, data_dir=dir_name, **kwargs)
+	dataset_obj = ClfToken(name, data_dir=dir_name, **kwargs)
 	dataset_obj.cache_dir = Path(cache_dir) / name
 	dataset_obj.setup()
 
@@ -132,6 +132,6 @@ def create_clf_dataset(data_dir, cache_dir: Union[str, Path] = DEFAULT_CACHE_DIR
 
 
 Datasets = {
-	"rgr": create_rgr_dataset,
-	"clf": create_clf_dataset,
+	"rgr_token": create_rgr_token_dataset,
+	"clf_token": create_clf_token_dataset,
 }

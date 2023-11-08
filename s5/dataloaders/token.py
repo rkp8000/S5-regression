@@ -16,10 +16,9 @@ from datasets import DatasetDict, Value, load_dataset
 from .base import default_data_path, SequenceDataset
 
 
-class FlyCourtshipRgr(SequenceDataset):
-    _name_ = "rgr_fly"
+class RgrToken(SequenceDataset):
+    _name_ = "rgr_token"
     d_output = 1
-    # d_output = 2
     l_output = 0
 
     @property
@@ -68,7 +67,7 @@ class FlyCourtshipRgr(SequenceDataset):
 
         dataset, self.tokenizer, self.vocab = self.process_dataset()
         # self.vocab_size = len(self.vocab)
-        print("Fly song vocab size:", len(self.vocab))  # should be 3 (Q/S/P) + 3 (special tokens)
+        print("Vocab size:", len(self.vocab))  # note: includes special tokens
 
         dataset.set_format(type="torch", columns=["song_num", "fmtn"])
         self.dataset_train, self.dataset_val, self.dataset_test = (
@@ -179,8 +178,8 @@ class FlyCourtshipRgr(SequenceDataset):
         return dataset, tokenizer, vocab
 
 
-class FlyCourtshipClf(SequenceDataset):
-    _name_ = "clf_fly"
+class ClfToken(SequenceDataset):
+    _name_ = "clf_token"
     d_output = 2
     l_output = 0
 
@@ -215,10 +214,6 @@ class FlyCourtshipClf(SequenceDataset):
                     raise FileNotFoundError(
                         f"""
                     File {str(split_path)} not found.
-                    To get the dataset, download lra_release.gz from
-                    https://github.com/google-research/long-range-arena,
-                    then unzip it with tar -xvf lra_release.gz.
-                    Then point data_dir to the tsv_data directory.
                     """
                     )
         else:  # Process the dataset and save it
@@ -234,7 +229,7 @@ class FlyCourtshipClf(SequenceDataset):
 
         dataset, self.tokenizer, self.vocab = self.process_dataset()
         # self.vocab_size = len(self.vocab)
-        print("Fly song vocab size:", len(self.vocab))  # should be 3 (Q/S/P) + 3 (special tokens)
+        print("Vcab size:", len(self.vocab))  # note: includes special tokens
 
         dataset.set_format(type="torch", columns=["song_num", "fmtn"])
         self.dataset_train, self.dataset_val, self.dataset_test = (

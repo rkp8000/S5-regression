@@ -46,11 +46,6 @@ def train(args):
 
     # Dataset dependent logic
     padded = True
-    
-    if args.problem_type == 'rgr':
-        regression = True
-    elif args.problem_type == 'clf':
-        regression = False
 
     # Create dataset...
     init_rng, key = random.split(init_rng, num=2)
@@ -94,9 +89,9 @@ def train(args):
                              clip_eigs=args.clip_eigs,
                              bidirectional=args.bidirectional)
     
-    if args.problem_type == 'rgr':
+    if args.problem_type == 'rgr_token':
         SeqModel = BatchRegressionModel
-    elif args.problem_type == 'clf':
+    elif args.problem_type == 'clf_token':
         SeqModel = BatchClassificationModel
         
     model_cls = partial(

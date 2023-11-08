@@ -336,7 +336,7 @@ def train_epoch(state, rng, model, problem_type, trainloader, seq_len, in_dim, b
         inputs, targets, integration_times = prep_batch(batch, seq_len, in_dim)
         rng, drop_rng = jax.random.split(rng)
         
-        if problem_type == 'clf':
+        if problem_type == 'clf_token':
             state, loss, preds, targs = train_step_clf(
                 state,
                 drop_rng,
@@ -347,7 +347,7 @@ def train_epoch(state, rng, model, problem_type, trainloader, seq_len, in_dim, b
                 batchnorm,
                 return_train,
             )
-        elif problem_type == 'rgr':
+        elif problem_type == 'rgr_token':
             state, loss, preds, targs = train_step_rgr(
                 state,
                 drop_rng,
@@ -373,7 +373,7 @@ def validate(state, model, problem_type, testloader, seq_len, in_dim, batchnorm,
     """Validation function that loops over batches"""
     model = model(training=False, step_rescale=step_rescale)
     
-    if problem_type == 'clf':
+    if problem_type == 'clf_token':
         losses, accuracies, preds, targets = np.array([]), np.array([]), np.array([]), np.array([])
         for batch_idx, batch in enumerate(tqdm(testloader)):
             inputs, target, integration_timesteps = prep_batch(batch, seq_len, in_dim)
@@ -386,7 +386,7 @@ def validate(state, model, problem_type, testloader, seq_len, in_dim, batchnorm,
         aveloss, aveaccu = np.mean(losses), np.mean(accuracies)
         return aveloss, aveaccu, preds, targets
     
-    elif problem_type == 'rgr':
+    elif problem_type == 'rgr_token':
         losses, y_hats, targets = np.array([]), np.array([]), np.array([])
         for batch_idx, batch in enumerate(tqdm(testloader)):
             inputs, target, integration_timesteps = prep_batch(batch, seq_len, in_dim)
