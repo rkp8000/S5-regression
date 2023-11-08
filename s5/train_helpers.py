@@ -374,15 +374,21 @@ def validate(state, model, problem_type, testloader, seq_len, in_dim, batchnorm,
     model = model(training=False, step_rescale=step_rescale)
     
     if problem_type == 'clf_token':
-        losses, accuracies, preds, targets = np.array([]), np.array([]), np.array([]), np.array([])
+        # losses, accuracies, preds, targets = np.array([]), np.array([]), [], np.array([])
+        losses, accuracies, preds, targets = [], [], [], []
         for batch_idx, batch in enumerate(tqdm(testloader)):
             inputs, target, integration_timesteps = prep_batch(batch, seq_len, in_dim)
             loss, acc, pred = eval_step_clf(inputs, target, integration_timesteps, state, model, batchnorm)
-            losses = np.append(losses, loss)
-            accuracies = np.append(accuracies, acc)
-            preds = np.append(preds, pred)
-            targets = np.append(targets, target)
+            losses.append(loss)
+            accuracies.append(acc)
+            preds.append(pred)
+            targets.append(target)
 
+        losses = numpy.concatenate(losses, 0)
+        preds = numpy.concatenate(preds, 0)
+        accuracies = numpy.concatenate(accuracies, 0)
+        targets = numpy.concatenate(targets, 0)
+        
         aveloss, aveaccu = np.mean(losses), np.mean(accuracies)
         return aveloss, aveaccu, preds, targets
     

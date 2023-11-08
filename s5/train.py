@@ -193,7 +193,7 @@ def train(args):
             f"\tTrain Loss: {train_loss:.5f} -- Val Loss: {val_loss:.5f} --Test Loss: {test_loss:.5f} --"
             f" Val Accuracy: {val_acc:.4f} -- Test Accuracy: {test_acc:.4f}"
         )
-
+        
         if args.epoch_save_dir:
             
             save_dict = {
