@@ -5,15 +5,15 @@ Simplified version of S5 implementation from Smith, Warrington, Linderman 2023 t
 To install and run the code on a cluster with a module system (in the virtual environment "s5-gpu"):
 
 ```
-$ git clone https://github.com/rkp8000/S5-token.git
-$ cd S5-token
+$ git clone https://github.com/rkp8000/s5-della.git
+$ cd s5-della
 
 $ module load anaconda3/2023.3
 $ module load cudnn/cuda-11.x/8.2.0
 
 # installation of packages (only need to do this once)
 
-$ export HF_DATASETS_CACHE="/scratch/gpfs/rp21/s5_fly/S5-regression/cache_hf"
+$ export HF_DATASETS_CACHE="/scratch/gpfs/<your_netid>/cache_hf"
 
 $ conda create -n s5-gpu-test python=3.11
 $ conda activate s5-gpu-test
