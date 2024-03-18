@@ -11,8 +11,6 @@ $ cd s5-della
 $ module load anaconda3/2023.3
 $ module load cudnn/cuda-11.x/8.2.0
 
-# installation of packages (only need to do this once)
-
 $ export HF_DATASETS_CACHE="/scratch/gpfs/<your_netid>/cache_hf"
 
 $ conda create -n s5-gpu-test python=3.11
