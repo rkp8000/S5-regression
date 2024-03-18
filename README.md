@@ -47,6 +47,8 @@ Run
 $ sbatch 1_ultralight_test.slurm
 ```
 
+Once the script starts running (check status via `$ squeue -u <your_netid>`) it should print output to slurm_out/... and upon completion create 4 .png files showing the validation set predictions and loss trajectory for the classification and regression examples.
+
 # From the original authors:
 
 **Simplified State Space Layers for Sequence Modeling**  
