@@ -2,7 +2,7 @@ Simplified version of S5 implementation from Smith, Warrington, Linderman 2023 t
 
 
 ## Requirements & Installation
-To install and run the code on a cluster with a module system (in the virtual environment "s5-gpu"):
+To install and run the code on a cluster with a module system (in the virtual environment "s5-gpu-test"):
 
 ```
 $ git clone https://github.com/rkp8000/s5-della.git
