@@ -46,7 +46,7 @@ class RgrToken(SequenceDataset):
 
     def prepare_data(self):
         if self.cache_dir is None:
-            for split in ["train", "eval", "test"]:
+            for split in ["train", "val", "test"]:
                 split_path = self.data_dir / f"{split}.tsv"
                 if not split_path.is_file():
                     raise FileNotFoundError(
@@ -100,15 +100,15 @@ class RgrToken(SequenceDataset):
             "csv",
             data_files={
                 "train": str(self.data_dir / "train.tsv"),
-                "val": str(self.data_dir / "eval.tsv"),
+                "val": str(self.data_dir / "val.tsv"),
                 "test": str(self.data_dir / "test.tsv"),
             },
             delimiter="\t",
-            column_names=["target", "session", "frame", "input_seq"],
+            column_names=["target", "input_seq"],
             keep_in_memory=True,
         )
         
-        dataset = dataset.remove_columns(["session", "frame"])
+        # dataset = dataset.remove_columns(["session", "frame"])
         new_features = dataset["train"].features.copy()
         new_features["target"] = Value("float32")
         dataset = dataset.cast(new_features)
@@ -208,7 +208,7 @@ class ClfToken(SequenceDataset):
 
     def prepare_data(self):
         if self.cache_dir is None:
-            for split in ["train", "eval", "test"]:
+            for split in ["train", "val", "test"]:
                 split_path = self.data_dir / f"{split}.tsv"
                 if not split_path.is_file():
                     raise FileNotFoundError(
@@ -269,14 +269,14 @@ class ClfToken(SequenceDataset):
             "csv",
             data_files={
                 "train": str(self.data_dir / "train.tsv"),
-                "val": str(self.data_dir / "eval.tsv"),
+                "val": str(self.data_dir / "val.tsv"),
                 "test": str(self.data_dir / "test.tsv"),
             },
             delimiter="\t",
-            column_names=["target", "session", "frame", "input_seq"],
+            column_names=["target", "input_seq"],
             keep_in_memory=True,
         )
-        dataset = dataset.remove_columns(["session", "frame"])
+        # dataset = dataset.remove_columns(["session", "frame"])
         new_features = dataset["train"].features.copy()
         new_features["target"] = Value("int32")
         dataset = dataset.cast(new_features)
