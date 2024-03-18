@@ -1,20 +1,4 @@
-Simplified version of S5 jax/flax implementation from Smith, Warrington, Linderman 2023.
-
-**Simplified State Space Layers for Sequence Modeling**  
-Jimmy T.H. Smith\*, Andrew Warrington\*, Scott Linderman  
-International Conference on Learning Representations, 2023.  
-Notable-top-5% (Oral).  
-[arXiv](https://arxiv.org/abs/2208.04933)  
-[OpenReview](https://openreview.net/forum?id=Ai8Hw3AXqks)
-
-![](./docs/figures/pngs/s5-matrix-blocks.png)
-<p style="text-align: center;">
-Figure 1:  S5 uses a single multi-input, multi-output linear state-space model, coupled with non-linearities, to define a non-linear sequence-to-sequence transformation. Parallel scans are used for efficient offline processing. 
-</p>
-
-
-The S5 layer builds on the prior S4 work ([paper](https://arxiv.org/abs/2111.00396)). While it has departed considerably, this repository originally started off with much of the JAX implementation of S4 from the
-Annotated S4 blog by Rush and Karamcheti (available [here](https://github.com/srush/annotated-s4)).
+Simplified version of S5 implementation from Smith, Warrington, Linderman 2023 that works on Princeton's Della Cluster.
 
 
 ## Requirements & Installation
@@ -44,6 +28,25 @@ $ conda install jupyter matplotlib numpy scipy
 ```
 
 (there might be a way to simplify this installation process).
+
+
+From the original authors:
+
+**Simplified State Space Layers for Sequence Modeling**  
+Jimmy T.H. Smith\*, Andrew Warrington\*, Scott Linderman  
+International Conference on Learning Representations, 2023.  
+Notable-top-5% (Oral).  
+[arXiv](https://arxiv.org/abs/2208.04933)  
+[OpenReview](https://openreview.net/forum?id=Ai8Hw3AXqks)
+
+![](./docs/figures/pngs/s5-matrix-blocks.png)
+<p style="text-align: center;">
+Figure 1:  S5 uses a single multi-input, multi-output linear state-space model, coupled with non-linearities, to define a non-linear sequence-to-sequence transformation. Parallel scans are used for efficient offline processing. 
+</p>
+
+
+The S5 layer builds on the prior S4 work ([paper](https://arxiv.org/abs/2111.00396)). While it has departed considerably, this repository originally started off with much of the JAX implementation of S4 from the
+Annotated S4 blog by Rush and Karamcheti (available [here](https://github.com/srush/annotated-s4)).
 
 ## Repository Structure
 Directories and files that ship with GitHub repo:
