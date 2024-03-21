@@ -12,7 +12,7 @@
 #SBATCH --partition=mig
 #SBATCH --mail-type=all
 
-export HF_DATASETS_CACHE="/scratch/gpfs/rp21/cache_hf"
+export HF_DATASETS_CACHE="/scratch/gpfs/<your_netid>/cache_hf"
 
 echo "SLURM_ARRAY_JOB_ID is $SLURM_ARRAY_JOB_ID."
 echo "SLURM_ARRAY_TASK_ID is $SLURM_ARRAY_TASK_ID."
