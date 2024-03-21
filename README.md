@@ -1,4 +1,4 @@
-Simplified version of S5 implementation from Smith, Warrington, Linderman 2023 that works on Princeton's Della Cluster.
+Simplified version of S5 implementation from Smith, Warrington, Linderman 2023 that should work out-of-the-box on Princeton's Della Cluster.
 
 
 ## Requirements & Installation
