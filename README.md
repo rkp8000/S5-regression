@@ -37,7 +37,7 @@ Make sure "Node type" is "mig" (small GPU). Set "Number of cores" to 1, "Memory 
 
 Navigate to s5-della and open the notebook 1_real_test.ipynb. If everything installed correctly, the first cell should output "Using gpu", and training on the classification and regression examples should be very fast. You can also test a version in which the inputs are short token sequences in 2_token_test.ipynb.
 
-The notebooks 1A and 1B show how the training/val/test data was created/formatted, which is important if you want to apply this to new datasets. 
+The notebooks 0A and 0B show how the training/val/test data was created/formatted, which is important if you want to apply this to new datasets. 
 
 Currently this implementation works only with (1) 1-dimensional real-valued input sequences (see 1_real_test) or (2) character string input sequences (see 2_token_test).
 
