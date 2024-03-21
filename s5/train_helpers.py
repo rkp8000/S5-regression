@@ -253,7 +253,8 @@ def create_train_state(model_cls,
 
 def prep_batch(batch: tuple,
                seq_len: int,
-               in_dim: int) -> Tuple[np.ndarray, np.ndarray, np.array]:
+               in_dim: int,
+               is_token: bool) -> Tuple[np.ndarray, np.ndarray, np.array]:
     """
     Take a batch and convert it to a standard x/y format.
     :param batch:       (x, y, aux_data) as returned from dataloader.
@@ -268,10 +269,10 @@ def prep_batch(batch: tuple,
         inputs, targets, aux_data = batch
     else:
         raise RuntimeError("Err... not sure what I should do... Unhandled data type. ")
-
+    
     # Convert to JAX.
     inputs = np.asarray(inputs.numpy())
-
+    
     # Grab lengths from aux if it is there.
     lengths = aux_data.get('lengths', None)
 
@@ -280,12 +281,14 @@ def prep_batch(batch: tuple,
     if num_pad > 0:
         # Assuming vocab padding value is zero
         inputs = np.pad(inputs, ((0, 0), (0, num_pad)), 'constant', constant_values=(0,))
-
+    
     # Inputs is either [n_batch, seq_len] or [n_batch, seq_len, in_dim].
     # If there are not three dimensions and trailing dimension is not equal to in_dim then
     # transform into one-hot.  This should be a fairly reliable fix.
-    if (inputs.ndim < 3) and (inputs.shape[-1] != in_dim):
+    if (inputs.ndim < 3) and is_token:  #(inputs.shape[-1] != in_dim):
         inputs = one_hot(np.asarray(inputs), in_dim)
+    elif (inputs.ndim < 3):
+        inputs = np.expand_dims(inputs, axis=2)
     
     # If there are lengths, bundle them up.
     if lengths is not None:
@@ -333,10 +336,13 @@ def train_epoch(state, rng, model, problem_type, trainloader, seq_len, in_dim, b
     targs_all = []
     
     for batch_idx, batch in enumerate(tqdm(trainloader)):
-        inputs, targets, integration_times = prep_batch(batch, seq_len, in_dim)
+        
+        inputs, targets, integration_times = prep_batch(
+            batch, seq_len, in_dim, is_token=problem_type.endswith('token'))
+        
         rng, drop_rng = jax.random.split(rng)
         
-        if problem_type == 'clf_token':
+        if problem_type in ['clf_real', 'clf_token']:
             state, loss, preds, targs = train_step_clf(
                 state,
                 drop_rng,
@@ -347,7 +353,7 @@ def train_epoch(state, rng, model, problem_type, trainloader, seq_len, in_dim, b
                 batchnorm,
                 return_train,
             )
-        elif problem_type == 'rgr_token':
+        elif problem_type in ['rgr_real', 'rgr_token']:
             state, loss, preds, targs = train_step_rgr(
                 state,
                 drop_rng,
@@ -373,11 +379,43 @@ def validate(state, model, problem_type, testloader, seq_len, in_dim, batchnorm,
     """Validation function that loops over batches"""
     model = model(training=False, step_rescale=step_rescale)
     
-    if problem_type == 'clf_token':
+    if problem_type == 'clf_real':
         # losses, accuracies, preds, targets = np.array([]), np.array([]), [], np.array([])
         losses, accuracies, preds, targets = [], [], [], []
         for batch_idx, batch in enumerate(tqdm(testloader)):
-            inputs, target, integration_timesteps = prep_batch(batch, seq_len, in_dim)
+            inputs, target, integration_timesteps = prep_batch(batch, seq_len, in_dim, is_token=False)
+            loss, acc, pred = eval_step_clf(inputs, target, integration_timesteps, state, model, batchnorm)
+            losses.append(loss)
+            accuracies.append(acc)
+            preds.append(pred)
+            targets.append(target)
+
+        losses = numpy.concatenate(losses, 0)
+        preds = numpy.concatenate(preds, 0)
+        accuracies = numpy.concatenate(accuracies, 0)
+        targets = numpy.concatenate(targets, 0)
+        
+        aveloss, aveaccu = np.mean(losses), np.mean(accuracies)
+        return aveloss, aveaccu, preds, targets
+    
+    elif problem_type == 'rgr_real':
+        losses, y_hats, targets = np.array([]), np.array([]), np.array([])
+        for batch_idx, batch in enumerate(tqdm(testloader)):
+            inputs, target, integration_timesteps = prep_batch(batch, seq_len, in_dim, is_token=False)
+            loss, y_hat = eval_step_rgr(inputs, target, integration_timesteps, state, model, batchnorm)
+            losses = np.append(losses, loss)
+
+            targets = np.append(targets, target)
+            y_hats = np.append(y_hats, y_hat)
+
+        aveloss = np.mean(losses)
+        return aveloss, np.nan, y_hats, targets
+    
+    elif problem_type == 'clf_token':
+        # losses, accuracies, preds, targets = np.array([]), np.array([]), [], np.array([])
+        losses, accuracies, preds, targets = [], [], [], []
+        for batch_idx, batch in enumerate(tqdm(testloader)):
+            inputs, target, integration_timesteps = prep_batch(batch, seq_len, in_dim, is_token=True)
             loss, acc, pred = eval_step_clf(inputs, target, integration_timesteps, state, model, batchnorm)
             losses.append(loss)
             accuracies.append(acc)
@@ -395,7 +433,7 @@ def validate(state, model, problem_type, testloader, seq_len, in_dim, batchnorm,
     elif problem_type == 'rgr_token':
         losses, y_hats, targets = np.array([]), np.array([]), np.array([])
         for batch_idx, batch in enumerate(tqdm(testloader)):
-            inputs, target, integration_timesteps = prep_batch(batch, seq_len, in_dim)
+            inputs, target, integration_timesteps = prep_batch(batch, seq_len, in_dim, is_token=True)
             loss, y_hat = eval_step_rgr(inputs, target, integration_timesteps, state, model, batchnorm)
             losses = np.append(losses, loss)
 

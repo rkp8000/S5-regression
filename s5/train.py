@@ -89,9 +89,9 @@ def train(args):
                              clip_eigs=args.clip_eigs,
                              bidirectional=args.bidirectional)
     
-    if args.problem_type == 'rgr_token':
+    if args.problem_type in ['rgr_real', 'rgr_token']:
         SeqModel = BatchRegressionModel
-    elif args.problem_type == 'clf_token':
+    elif args.problem_type in ['clf_real', 'clf_token']:
         SeqModel = BatchClassificationModel
         
     model_cls = partial(

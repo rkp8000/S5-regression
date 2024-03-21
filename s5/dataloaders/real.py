@@ -1,5 +1,6 @@
 import io
 import logging
+import numpy as np
 import os
 import pickle
 from pathlib import Path
@@ -14,28 +15,25 @@ from datasets import DatasetDict, Value, load_dataset
 from .base import default_data_path, SequenceDataset
 
 
-class RgrToken(SequenceDataset):
-    _name_ = "rgr_token"
+class RgrReal(SequenceDataset):
+    _name_ = "rgr_real"
     d_output = 1
     l_output = 0
-
-    @property
-    def n_tokens(self):
-        return len(self.vocab)
 
     @property
     def init_defaults(self):
         return {
             "l_max": 4000,
-            # 'max_vocab': 100, # Full size 98
-            "append_bos": False,
-            "append_eos": True,
+            # # 'max_vocab': 100, # Full size 98
+            # "append_bos": False,
+            # "append_eos": True,
             "n_workers": 4,  # For tokenizing only
         }
 
     @property
     def _cache_dir_name(self):
-        return f"l_max-{self.l_max}-append_bos-{self.append_bos}-append_eos-{self.append_eos}"
+        # return f"l_max-{self.l_max}-append_bos-{self.append_bos}-append_eos-{self.append_eos}"
+        return f"l_max-{self.l_max}"
 
     def init(self):
         if self.data_dir is None:
@@ -63,9 +61,7 @@ class RgrToken(SequenceDataset):
         # https://github.com/pytorch/pytorch/issues/11201
         torch.multiprocessing.set_sharing_strategy("file_system")
 
-        dataset, self.tokenizer, self.vocab = self.process_dataset()
-        # self.vocab_size = len(self.vocab)
-        print("Vocab size:", len(self.vocab))  # note: includes special tokens
+        dataset = self.process_dataset()
 
         dataset.set_format(type="torch", columns=["input_seq_num", "target"])
         self.dataset_train, self.dataset_val, self.dataset_test = (
@@ -78,7 +74,7 @@ class RgrToken(SequenceDataset):
             
             # pad inputs
             xs = nn.utils.rnn.pad_sequence(
-                xs, padding_value=self.vocab["<pad>"], batch_first=True
+                xs, padding_value=0, batch_first=True
             )
             ys = torch.tensor(ys)
             
@@ -106,81 +102,44 @@ class RgrToken(SequenceDataset):
             keep_in_memory=True,
         )
         
-        # dataset = dataset.remove_columns(["session", "frame"])
         new_features = dataset["train"].features.copy()
         new_features["target"] = Value("float32")
         dataset = dataset.cast(new_features)
 
-        tokenizer = list  # Just convert a string to a list of chars
-        # Account for <bos> and <eos> tokens
-        l_max = self.l_max - int(self.append_bos) - int(self.append_eos)
-        tokenize = lambda example: {
-            "tokens": tokenizer(example["input_seq"])[:l_max],
+        numericalize = lambda example: {
+            "input_seq_num": [float(val) for val in example["input_seq"].split(',')],
         }
         dataset = dataset.map(
-            tokenize,
+            numericalize,
             remove_columns=["input_seq"],
             keep_in_memory=True,
             load_from_cache_file=False,
             num_proc=max(self.n_workers, 1),
         )
-        
-        vocab = torchtext.vocab.build_vocab_from_iterator(
-            dataset["train"]["tokens"],
-            specials=(
-                ["<pad>", "<unk>"]
-                + (["<bos>"] if self.append_bos else [])
-                + (["<eos>"] if self.append_eos else [])
-            ),
-        )
-        vocab.set_default_index(vocab["<unk>"])
 
-        encode = lambda text: vocab(
-            (["<bos>"] if self.append_bos else [])
-            + text
-            + (["<eos>"] if self.append_eos else [])
-        )
-        numericalize = lambda example: {
-            "input_seq_num": encode(example["tokens"]),
-        }
-        dataset = dataset.map(
-            numericalize,
-            remove_columns=["tokens"],
-            keep_in_memory=True,
-            load_from_cache_file=False,
-            num_proc=max(self.n_workers, 1),
-        )
-        
         self.input_len = len(dataset['val']['input_seq_num'][0])
-
+        
         if cache_dir is not None:
-            self._save_to_cache(dataset, tokenizer, vocab, cache_dir)
-        return dataset, tokenizer, vocab
+            self._save_to_cache(dataset, cache_dir)
+        return dataset
 
-    def _save_to_cache(self, dataset, tokenizer, vocab, cache_dir):
+    def _save_to_cache(self, dataset, cache_dir):
         cache_dir = self.cache_dir / self._cache_dir_name
         logger = logging.getLogger(__name__)
         logger.info(f"Saving to cache at {str(cache_dir)}")
         dataset.save_to_disk(str(cache_dir))
-        with open(cache_dir / "tokenizer.pkl", "wb") as f:
-            pickle.dump(tokenizer, f)
-        with open(cache_dir / "vocab.pkl", "wb") as f:
-            pickle.dump(vocab, f)
 
     def _load_from_cache(self, cache_dir):
         assert cache_dir.is_dir()
         logger = logging.getLogger(__name__)
         logger.info(f"Load from cache at {str(cache_dir)}")
         dataset = DatasetDict.load_from_disk(str(cache_dir))
-        with open(cache_dir / "tokenizer.pkl", "rb") as f:
-            tokenizer = pickle.load(f)
-        with open(cache_dir / "vocab.pkl", "rb") as f:
-            vocab = pickle.load(f)
-        return dataset, tokenizer, vocab
+
+        return dataset
 
 
-class ClfToken(SequenceDataset):
-    _name_ = "clf_token"
+class ClfReal(SequenceDataset):
+    _name_ = "clf_real"
     d_output = 2
     l_output = 0
 
@@ -193,14 +152,15 @@ class ClfToken(SequenceDataset):
         return {
             "l_max": 4000,
             # 'max_vocab': 100, # Full size 98
-            "append_bos": False,
-            "append_eos": True,
+            # "append_bos": False,
+            # "append_eos": True,
             "n_workers": 4,  # For tokenizing only
         }
 
     @property
     def _cache_dir_name(self):
-        return f"l_max-{self.l_max}-append_bos-{self.append_bos}-append_eos-{self.append_eos}"
+        # return f"l_max-{self.l_max}-append_bos-{self.append_bos}-append_eos-{self.append_eos}"
+        return f"l_max-{self.l_max}"
 
     def init(self):
         if self.data_dir is None:
@@ -228,9 +188,7 @@ class ClfToken(SequenceDataset):
         # https://github.com/pytorch/pytorch/issues/11201
         torch.multiprocessing.set_sharing_strategy("file_system")
 
-        dataset, self.tokenizer, self.vocab = self.process_dataset()
-        # self.vocab_size = len(self.vocab)
-        print("Vcab size:", len(self.vocab))  # note: includes special tokens
+        dataset = self.process_dataset()
 
         dataset.set_format(type="torch", columns=["input_seq_num", "target"])
         self.dataset_train, self.dataset_val, self.dataset_test = (
@@ -240,20 +198,15 @@ class ClfToken(SequenceDataset):
         )
 
         def collate_batch(batch):
-            xs, ys = zip(
-                *[
-                    (data["input_seq_num"], data["target"])
-                    for data in batch
-                ]
-            )
+            xs, ys = zip(*[(data["input_seq_num"], data["target"]) for data in batch])
             lengths = torch.tensor([len(x) for x in xs])
             
             # pad inputs
             xs = nn.utils.rnn.pad_sequence(
-                xs, padding_value=self.vocab["<pad>"], batch_first=True
+                xs, padding_value=0, batch_first=True
             )
             ys = torch.tensor(ys)
-
+            
             return xs, ys, {"lengths": lengths}
 
         self._collate_fn = collate_batch
@@ -282,40 +235,12 @@ class ClfToken(SequenceDataset):
         new_features["target"] = Value("int32")
         dataset = dataset.cast(new_features)
 
-        tokenizer = list  # Just convert a string to a list of chars
-        # Account for <bos> and <eos> tokens
-        l_max = self.l_max - int(self.append_bos) - int(self.append_eos)
-        tokenize = lambda example: {
-            "tokens": tokenizer(example["input_seq"])[:l_max],
-        }
-        dataset = dataset.map(
-            tokenize,
-            remove_columns=["input_seq"],
-            keep_in_memory=True,
-            load_from_cache_file=False,
-            num_proc=max(self.n_workers, 1),
-        )
-        vocab = torchtext.vocab.build_vocab_from_iterator(
-            dataset["train"]["tokens"],
-            specials=(
-                ["<pad>", "<unk>"]
-                + (["<bos>"] if self.append_bos else [])
-                + (["<eos>"] if self.append_eos else [])
-            ),
-        )
-        vocab.set_default_index(vocab["<unk>"])
-
-        encode = lambda text: vocab(
-            (["<bos>"] if self.append_bos else [])
-            + text
-            + (["<eos>"] if self.append_eos else [])
-        )
         numericalize = lambda example: {
-            "input_seq_num": encode(example["tokens"]),
+            "input_seq_num": [float(val) for val in example["input_seq"].split(',')],
         }
         dataset = dataset.map(
             numericalize,
-            remove_columns=["tokens"],
+            remove_columns=["input_seq"],
             keep_in_memory=True,
             load_from_cache_file=False,
             num_proc=max(self.n_workers, 1),
@@ -324,26 +249,19 @@ class ClfToken(SequenceDataset):
         self.input_len = len(dataset['val']['input_seq_num'][0])
         
         if cache_dir is not None:
-            self._save_to_cache(dataset, tokenizer, vocab, cache_dir)
-        return dataset, tokenizer, vocab
+            self._save_to_cache(dataset, cache_dir)
+        return dataset
 
-    def _save_to_cache(self, dataset, tokenizer, vocab, cache_dir):
+    def _save_to_cache(self, dataset, cache_dir):
         cache_dir = self.cache_dir / self._cache_dir_name
         logger = logging.getLogger(__name__)
         logger.info(f"Saving to cache at {str(cache_dir)}")
         dataset.save_to_disk(str(cache_dir))
-        with open(cache_dir / "tokenizer.pkl", "wb") as f:
-            pickle.dump(tokenizer, f)
-        with open(cache_dir / "vocab.pkl", "wb") as f:
-            pickle.dump(vocab, f)
 
     def _load_from_cache(self, cache_dir):
         assert cache_dir.is_dir()
         logger = logging.getLogger(__name__)
         logger.info(f"Load from cache at {str(cache_dir)}")
         dataset = DatasetDict.load_from_disk(str(cache_dir))
-        with open(cache_dir / "tokenizer.pkl", "rb") as f:
-            tokenizer = pickle.load(f)
-        with open(cache_dir / "vocab.pkl", "rb") as f:
-            vocab = pickle.load(f)
-        return dataset, tokenizer, vocab
+        
+        return dataset

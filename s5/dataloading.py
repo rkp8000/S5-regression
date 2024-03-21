@@ -55,6 +55,84 @@ def make_data_loader(dset,
 									   drop_last=drop_last, generator=rng)
 									   
 
+def create_rgr_real_dataset(data_dir, cache_dir: Union[str, Path] = DEFAULT_CACHE_DIR_ROOT,
+										  bsz: int = 50,
+										  seed: int = 42, clear_cache=False) -> ReturnType:
+	"""
+	See abstract template.
+	"""
+	print("[*] Generating Real-valued Sequence Regression Dataset")
+	from s5.dataloaders.real import RgrReal
+	name = 'rgr_real'
+    
+	if clear_cache and os.path.exists(os.path.join(cache_dir, name)):
+		print('Clearing cache...')
+		shutil.rmtree(os.path.join(cache_dir, name))
+
+	dir_name = os.path.join('./data_s5/', data_dir)
+
+	kwargs = {
+		'n_workers': 1,
+	}
+
+	dataset_obj = RgrReal(name, data_dir=dir_name, **kwargs)
+	dataset_obj.cache_dir = Path(cache_dir) / name
+	dataset_obj.setup()
+
+	trn_loader = make_data_loader(dataset_obj.dataset_train, dataset_obj, seed=seed, batch_size=bsz)
+	val_loader = make_data_loader(dataset_obj.dataset_val, dataset_obj, seed=seed, batch_size=bsz, drop_last=False, shuffle=False)
+	tst_loader = make_data_loader(dataset_obj.dataset_test, dataset_obj, seed=seed, batch_size=bsz, drop_last=False, shuffle=False)
+
+	d_out = dataset_obj.d_output
+	# SEQ_LENGTH = dataset_obj.l_max
+	SEQ_LENGTH = dataset_obj.input_len
+	IN_DIM = 1  #len(dataset_obj.vocab)
+	TRAIN_SIZE = len(dataset_obj.dataset_train)
+
+	aux_loaders = {}
+
+	return trn_loader, val_loader, tst_loader, aux_loaders, d_out, SEQ_LENGTH, IN_DIM, TRAIN_SIZE
+	
+	
+def create_clf_real_dataset(data_dir, cache_dir: Union[str, Path] = DEFAULT_CACHE_DIR_ROOT,
+										  bsz: int = 50,
+										  seed: int = 42, clear_cache=False) -> ReturnType:
+	"""
+	See abstract template.
+	"""
+	print("[*] Generating Real-valued Sequence Classification Dataset")
+	from s5.dataloaders.real import ClfReal
+	name = 'clf_real'
+
+	if clear_cache and os.path.exists(os.path.join(cache_dir, name)):
+		print('Clearing cache...')
+		shutil.rmtree(os.path.join(cache_dir, name))
+        
+	dir_name = os.path.join('./data_s5/', data_dir)
+
+	kwargs = {
+		'n_workers': 1,
+	}
+
+	dataset_obj = ClfReal(name, data_dir=dir_name, **kwargs)
+	dataset_obj.cache_dir = Path(cache_dir) / name
+	dataset_obj.setup()
+
+	trn_loader = make_data_loader(dataset_obj.dataset_train, dataset_obj, seed=seed, batch_size=bsz)
+	val_loader = make_data_loader(dataset_obj.dataset_val, dataset_obj, seed=seed, batch_size=bsz, drop_last=False, shuffle=False)
+	tst_loader = make_data_loader(dataset_obj.dataset_test, dataset_obj, seed=seed, batch_size=bsz, drop_last=False, shuffle=False)
+
+	d_out = dataset_obj.d_output
+	# SEQ_LENGTH = dataset_obj.l_max
+	SEQ_LENGTH = dataset_obj.input_len
+	IN_DIM = 1  #len(dataset_obj.vocab)
+	TRAIN_SIZE = len(dataset_obj.dataset_train)
+
+	aux_loaders = {}
+
+	return trn_loader, val_loader, tst_loader, aux_loaders, d_out, SEQ_LENGTH, IN_DIM, TRAIN_SIZE
+
+
 def create_rgr_token_dataset(data_dir, cache_dir: Union[str, Path] = DEFAULT_CACHE_DIR_ROOT,
 										  bsz: int = 50,
 										  seed: int = 42, clear_cache=False) -> ReturnType:
@@ -82,14 +160,17 @@ def create_rgr_token_dataset(data_dir, cache_dir: Union[str, Path] = DEFAULT_CAC
 	trn_loader = make_data_loader(dataset_obj.dataset_train, dataset_obj, seed=seed, batch_size=bsz)
 	val_loader = make_data_loader(dataset_obj.dataset_val, dataset_obj, seed=seed, batch_size=bsz, drop_last=False, shuffle=False)
 	tst_loader = make_data_loader(dataset_obj.dataset_test, dataset_obj, seed=seed, batch_size=bsz, drop_last=False, shuffle=False)
-
+    
 	d_out = dataset_obj.d_output
-	SEQ_LENGTH = dataset_obj.l_max
+	# SEQ_LENGTH = dataset_obj.l_max
+	SEQ_LENGTH = dataset_obj.input_len
 	IN_DIM = len(dataset_obj.vocab)
 	TRAIN_SIZE = len(dataset_obj.dataset_train)
-
+    
+	# import pdb; pdb.set_trace()
+    
 	aux_loaders = {}
-
+    
 	return trn_loader, val_loader, tst_loader, aux_loaders, d_out, SEQ_LENGTH, IN_DIM, TRAIN_SIZE
 	
 	
@@ -122,7 +203,8 @@ def create_clf_token_dataset(data_dir, cache_dir: Union[str, Path] = DEFAULT_CAC
 	tst_loader = make_data_loader(dataset_obj.dataset_test, dataset_obj, seed=seed, batch_size=bsz, drop_last=False, shuffle=False)
 
 	d_out = dataset_obj.d_output
-	SEQ_LENGTH = dataset_obj.l_max
+	# SEQ_LENGTH = dataset_obj.l_max
+	SEQ_LENGTH = dataset_obj.input_len
 	IN_DIM = len(dataset_obj.vocab)
 	TRAIN_SIZE = len(dataset_obj.dataset_train)
 
@@ -132,6 +214,8 @@ def create_clf_token_dataset(data_dir, cache_dir: Union[str, Path] = DEFAULT_CAC
 
 
 Datasets = {
+	"rgr_real": create_rgr_real_dataset,
+	"clf_real": create_clf_real_dataset,
 	"rgr_token": create_rgr_token_dataset,
 	"clf_token": create_clf_token_dataset,
 }

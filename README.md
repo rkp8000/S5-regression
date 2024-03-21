@@ -2,7 +2,7 @@ Simplified version of S5 implementation from Smith, Warrington, Linderman 2023 t
 
 
 ## Requirements & Installation
-To install and run on Della (in the virtual environment "s5-gpu-test"):
+To install and run the code on a cluster with a module system (in the virtual environment "s5-gpu-test"):
 
 ```
 $ git clone https://github.com/rkp8000/s5-della.git
@@ -22,7 +22,7 @@ $ pip install jax "jaxlib==0.4.7+cuda11.cudnn82" -f https://storage.googleapis.c
 
 $ pip install jax==0.4.10
 
-$ conda install jupyter matplotlib numpy scipy
+$ conda install jupyter matplotlib numpy scipy sklearn
 ```
 
 (There's probably a way to simplify this installation process, but this seems to work).
@@ -33,7 +33,7 @@ $ conda install jupyter matplotlib numpy scipy
 
 Go to mydella.princeton.edu --> Interactive Apps --> Jupyter to make a new session.
 
-Make sure "Node type" is "mig" (small GPU). Set "Number of cores" to 1, "Memory allocated for the job, in GBs" as 32, "Anaconda3 version" as "custom", "Path to a custom..." as "/home/<your_netid>/.conda/envs/s5-gpu-test", "Custom environment module paths..." as "cudnn/cuda-11.x/8.2.0", "Module(s) to load..." as "anaconda3/2023.3", "How to handle conda environments..." as "Try installing ipykernel...". Then click Launch.
+Make sure "Node type" is "mig" (small GPU). Set "Number of cores" to 1, "Memory allocated for the job, in GBs" as 4, "Anaconda3 version" as "custom", "Path to a custom..." as "/home/<your_netid>/.conda/envs/s5-gpu-test", "Custom environment module paths..." as "cudnn/cuda-11.x/8.2.0", "Module(s) to load..." as "anaconda3/2023.3", "How to handle conda environments..." as "Try installing ipykernel...". Then click Launch.
 
 Navigate to s5-della and open the notebook 1B_ultralight_test.ipynb . If everything installed correctly, the first cell should output "Using gpu", and training on the classification and regression examples should be very fast.
 
@@ -46,8 +46,6 @@ Run
 ```
 $ sbatch 1_ultralight_test.slurm
 ```
-
-Once the script starts running (check status via `$ squeue -u <your_netid>`) it should print output to slurm_out/... and upon completion create 4 .png files showing the validation set predictions and loss trajectory for the classification and regression examples.
 
 # From the original authors:
 
