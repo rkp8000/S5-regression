@@ -59,6 +59,8 @@ or
 $ sbatch 2_token_test.slurm
 ```
 
+(Note: do not run both of these at the same time since they both write to the epochs_clf and epochs_rgr directories.)
+
 # From the original authors:
 
 **Simplified State Space Layers for Sequence Modeling**  
