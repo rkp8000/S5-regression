@@ -1,4 +1,4 @@
-Simplified version of S5 implementation from Smith, Warrington, Linderman 2023 that should work out-of-the-box on Princeton's Della Cluster.
+Simplified version of S5 implementation from Smith, Warrington, Linderman 2023 that should work out-of-the-box on Princeton's Della Cluster. If new to Della, see the document how_to_della.pdf or the Princeton website: https://researchcomputing.princeton.edu/systems/della. Note that the slurm scripts in the s5 examples include lines requesting GPUs.
 
 
 ## Requirements & Installation
