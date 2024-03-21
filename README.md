@@ -35,16 +35,24 @@ Go to mydella.princeton.edu --> Interactive Apps --> Jupyter to make a new sessi
 
 Make sure "Node type" is "mig" (small GPU). Set "Number of cores" to 1, "Memory allocated for the job, in GBs" as 4, "Anaconda3 version" as "custom", "Path to a custom..." as "/home/<your_netid>/.conda/envs/s5-gpu-test", "Custom environment module paths..." as "cudnn/cuda-11.x/8.2.0", "Module(s) to load..." as "anaconda3/2023.3", "How to handle conda environments..." as "Try installing ipykernel...". Then click Launch.
 
-Navigate to s5-della and open the notebook 1B_ultralight_test.ipynb . If everything installed correctly, the first cell should output "Using gpu", and training on the classification and regression examples should be very fast.
+Navigate to s5-della and open the notebook 1_real_test.ipynb. If everything installed correctly, the first cell should output "Using gpu", and training on the classification and regression examples should be very fast. You can also test a version in which the inputs are short token sequences in 2_token_test.ipynb.
 
 ### Via slurm script
 
-Update the "export" line in 1_ultralight_test.slurm to replace <your_netid> with your net id.
+You can also test the code using the slurm system instead of the interactive Jupyter notebooks. The corresponding slurm files are 1_real_test.slurm and 2_token_test.slurm (and the eponymous Python files that they call).
 
-Run
+Before running either slurm files make sure to replace <your_netid> with your actual net id in the line beginning with "export".
+
+Then run
 
 ```
-$ sbatch 1_ultralight_test.slurm
+$ sbatch 1_real_test.slurm
+```
+
+or 
+
+```
+$ sbatch 2_token_test.slurm
 ```
 
 # From the original authors:
